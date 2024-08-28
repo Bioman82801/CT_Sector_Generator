@@ -1,0 +1,2051 @@
+Table SectorOutput, SystemOutput, SectorInput;
+
+int stellarDensity = 2; //Number or less must be rolled on 1d6 to generate a system
+int globalNameIndex = -1;
+
+String[] randomNames = new String[20000];
+StringList SectorDataOutput = new StringList();
+StringList autoHotKey = new StringList();
+String[] ASectorDataOutput;
+String hexNumber;
+
+TableRow SectorOutRow;
+object primary;
+int systems = 0;
+int worlds = 0;
+int sectorsToGenerate = 10;
+int reportsGenerated = 0;
+String outputFolder = "10 Generated Sectors " + timeStamp();
+ArrayList<Mainworld> mainworlds = new ArrayList<Mainworld>();
+ArrayList<Ship> shipList = new ArrayList<Ship>();
+PrintWriter output;
+
+int unrefinedFuelCost = 100, refinedFuelCost = 500;
+
+char[] primaryStarType = {'B', 'B', 'A', 'M', 'M', 'M', 'M', 'M', 'K', 'G', 'F', 'F', 'F'};
+String[] primaryStarSize = {"Ia", "Ib", "II", "III", "IV", "V", "V", "V", "V", "V", "V", "VI", "D"};
+char[] companionStarType = {'B', 'B', 'A', 'F', 'F', 'G', 'G', 'K', 'K', 'M', 'M', 'M', 'M'};
+String[] companionStarSize ={"Ia", "Ib", "II", "III", "IV", "D", "D", "V", "V", "VI", "D", "D", "D"};
+
+int[][] firstAvaliableOrbit = {{8, 7, 7, 7, 6, 6, 7, 7, 7, 7, 7, 8}, //Ia
+  {8, 6, 5, 5, 5, 4, 4, 5, 5, 6, 6, 7}, //Ib
+  {7, 5, 3, 2, 2, 2, 2, 2, 2, 3, 4, 6}, //II
+  {7, 5, 1, 1, 1, 1, 1, 1, 1, 1, 2, 4}, //III
+  {7, 3, 1, 0, 0, 0, 0, 0, 0}, //IV
+  {6, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, //V
+  {0, 0, 0, 0, 0, 0, 0}, //VI
+  {0, 0, 0, 0, 0, 0}  //D
+};
+int[][] habitableOrbit  = {{13, 12, 12, 12, 12, 11, 12, 12, 12, 12, 12, 12}, //Ia
+  {13, 11, 11, 10, 10, 10, 10, 10, 10, 11, 11, 12}, //Ib
+  {12, 11, 9, 8, 8, 8, 8, 8, 9, 9, 11, 12}, //II
+  {12, 10, 8, 7, 6, 6, 6, 7, 7, 8, 8, 9}, //III
+  {12, 9, 7, 6, 6, 5, 5, 5, 4}, //IV
+  {12, 9, 7, 6, 5, 4, 3, 2, 2, 0, 0, -1}, //V
+  { 3, 2, 1, 1, -1, -1, -1}, //VI
+  {0, -1, -1, -1, -1, -1}  //D
+};
+
+void setup() {
+  size(550, 525);
+  textSize(48);
+  background(150);
+  println("Start Time: " + HMS());
+
+  //Ship(String type, int cargo, int fuel,  int maximumJump, int cost, int crew, int crewSalary, int passengers, int lowBerth)
+  shipList.add(new Ship("Free Trader", 80, 30, 1, 37080000, 6, 17000, 4, 20));
+  shipList.add(new Ship("Far Trader", 60, 50, 2, 66175000, 5, 21000, 5, 4));
+
+  for (int i = 0; i < sectorsToGenerate; i++) {
+    //NameInput = loadTable("names.csv", "header");
+    //randomNames = new String[NameInput.getRowCount()];
+    //int index = 0;
+    //for (TableRow inRow : NameInput.rows()) {
+    //  randomNames[index] = inRow.getString("Name");
+    //  index++;
+    //}
+    mainworlds.clear();
+    SectorDataOutput = new StringList();
+    autoHotKey = new StringList();
+    autoHotKey.append("F9::");
+    autoHotKey.append("{");
+    autoHotKey.append("WinWait \"Untitled\"");
+    autoHotKey.append("WinActivate");
+    generateNames();
+    String sectorName = randomNames[dieRoll(1, 1000, -1)];
+    globalNameIndex += dieRoll(1, 20000);
+    SectorOutput = new Table();
+    SectorOutput.addColumn("Hex");
+    SectorOutput.addColumn("Name");
+    SectorOutput.addColumn("UWP");
+    SectorOutput.addColumn("Bases");
+    SectorOutput.addColumn("Remarks");
+    SectorOutput.addColumn("Zone");
+    SectorOutput.addColumn("PBG");
+    SectorOutput.addColumn("Allegiance");
+    SectorOutput.addColumn("Stars");
+    SectorOutput.addColumn("Ix");
+    SectorOutput.addColumn("Ex");
+    SectorOutput.addColumn("Cx");
+    SectorOutput.addColumn("Nobility");
+    SectorOutput.addColumn("W");
+
+    for (int x = 1; x <= 32; x++) {
+      for (int y = 1; y <= 40; y++) {
+        if (dieRoll(1, 6)<= stellarDensity) {
+          systems++;
+          worlds = 0;
+          primary = new object(0, null, -2);
+          object MW = primary.MWSearch(-1);
+          primary.orderChildren();
+          if (MW != null) {
+            MW.generateMW();
+          } else {
+            for (object child : primary.children) {
+              if (child.orbit == primary.HZ) {
+                if (child.type!= 0 && child.type!=2) {
+                  child.generateMW();
+                  break;
+                } else if (child.children != null) {
+                  for (object grandChild : child.children) {
+                    if (!grandChild.ring) {
+                      grandChild.generateMW();
+                      break;
+                    }
+                  }
+                }
+                break;
+              }
+            }
+          }
+
+          SystemOutput = new Table();
+          SystemOutput.addColumn("Orbit");
+          SystemOutput.addColumn("Name");
+          SystemOutput.addColumn("UWP");
+          SystemOutput.addColumn("Bases");
+          SystemOutput.addColumn("Trade Codes");
+
+          SectorOutRow = SectorOutput.addRow();
+
+          if (x<10) {
+            if (y<10) {
+              hexNumber = ("0" + x + "0" + y);
+            } else {
+              hexNumber = ("0" + x + y);
+            }
+          } else {
+            if (y<10) {
+              hexNumber = (x + "0" + y);
+            } else {
+              hexNumber = (str(x) + y);
+            }
+          }
+          SectorOutRow.setString("Hex", hexNumber);
+
+          primary.setOutRow();
+          saveTable(SystemOutput, "output/"+ outputFolder+"/"+ sectorName + "/" + hexNumber + " " + SectorOutRow.getString("Name") + ".csv");
+          //saveSystem
+        }
+      }
+    }
+
+    SectorDataOutput.reverse();
+    SectorDataOutput.append(str(systems));
+    SectorDataOutput.reverse();
+    autoHotKey.append("}");
+    saveTable(SectorOutput, "output/"+ outputFolder+"/"+ sectorName + "/"+ sectorName + " Sector.csv");
+    saveTable(SectorOutput, "output/"+ outputFolder+"/"+ sectorName + "/"+ sectorName + " Sector.tsv");
+    saveStrings("output/" + outputFolder +"/"+ sectorName + "/"+ sectorName + ".DAT", SectorDataOutput.toArray() );
+    saveStrings("output/" + outputFolder +"/"+ sectorName + "/"+ sectorName + ".ahk", autoHotKey.toArray());
+    //}
+
+    SectorInput = loadTable("output/"+ outputFolder+"/"+ sectorName + "/"+ sectorName + " Sector.csv", "header");
+    for (TableRow inputRow : SectorInput.rows()) {
+      mainworlds.add(new Mainworld(inputRow));
+    }
+
+    for (Ship trader : shipList) {
+      for (Mainworld world : mainworlds) {
+        world.neighbors.clear();
+        world.findMarkets(trader);
+        if (world.neighbors.size()>1) {
+          output = createWriter("output/"+ outputFolder+"/" +  sectorName + "/"+ sectorName + " Trade Reports/" + world.hex + " " + world.name + " (" + world.UWP + ") " + trader.type + ".rtf");
+          world.boilerPlate(trader);
+          for (Mainworld route : world.neighbors) {
+            world.generateReport(route, trader);
+          }
+          reportsGenerated++;
+          output.flush();
+          output.close();
+        }
+      }
+    }
+    //textSize(48);
+    //background(150);
+    //text(str(i) + " Sectors Generated", 20, 100);
+  }
+
+  text(str(systems)+ " Systems Generated", 20, 100);
+  text(str(reportsGenerated)+ " Reports Generated", 20, 300);
+  text(str(sectorsToGenerate) + " Sectors Generated", 20, 500);
+  println("Finish Time: " +HMS());
+  println("DONE");
+}
+class Mainworld {
+  int x, y, techLevel, goodsCost = 4000, population;
+  String name, tradeCodes, travelZone, goodsCode, hex, UWP;
+  boolean gasGiant;
+  char starport;
+  ArrayList<Mainworld> neighbors = new ArrayList<Mainworld>();
+
+  Mainworld(TableRow inputRow) {
+    hex = inputRow.getString("Hex");
+    name = inputRow.getString("Name");
+    UWP = inputRow.getString("UWP");
+    tradeCodes = inputRow.getString("Remarks");
+    travelZone = inputRow.getString("Zone");
+
+    if (inputRow.getString("PBG").charAt(2)-48>0) {
+      gasGiant = true;
+    } else {
+      gasGiant = false;
+    }
+
+    starport = inputRow.getString("UWP").charAt(0);
+    techLevel = inputRow.getString("UWP").charAt(8);
+    if (techLevel >= 65) {
+      techLevel -= 55;
+    } else {
+      techLevel -= 48;
+    }
+
+    population = inputRow.getString("UWP").charAt(4);
+    if (population >= 65) {
+      population -= 55;
+    } else {
+      population -= 48;
+    }
+
+    goodsCost += techLevel*100;
+
+    x = int(inputRow.getString("Hex").substring(0, 2));
+    y = int(inputRow.getString("Hex").substring(2));
+
+    switch(starport) {
+    case 'A':
+      goodsCost -= 1000;
+      break;
+    case 'C':
+      goodsCost += 1000;
+      break;
+    case 'D':
+      goodsCost += 2000;
+      break;
+    case 'E':
+      goodsCost += 3000;
+      break;
+    case 'X':
+      goodsCost += 5000;
+      break;
+    }
+
+    if (match(tradeCodes, "Ag") != null) {
+      goodsCost -= 1000;
+    }
+    if (match(tradeCodes, "As") != null) {
+      goodsCost -= 1000;
+    }
+    if (match(tradeCodes, "Ba") != null) {
+      goodsCost += 1000;
+    }
+    if (match(tradeCodes, "De") != null) {
+      goodsCost += 1000;
+    }
+    if (match(tradeCodes, "Fl") != null) {
+      goodsCost += 1000;
+    }
+    if (match(tradeCodes, "Hi") != null) {
+      goodsCost -= 1000;
+    }
+    if (match(tradeCodes, "In") != null) {
+      goodsCost -= 1000;
+    }
+    if (match(tradeCodes, "Lo") != null) {
+      goodsCost += 1000;
+    }
+    if (match(tradeCodes, "Ni") != null) {
+      goodsCost += 1000;
+    }
+    if (match(tradeCodes, "Po") != null) {
+      goodsCost -= 1000;
+    }
+    if (match(tradeCodes, "Ri") != null) {
+      goodsCost += 1000;
+    }
+    if (match(tradeCodes, "Va") != null) {
+      goodsCost += 1000;
+    }
+
+    goodsCode = starport + "-" + hex(techLevel, 1) + " " + tradeCodes + str(goodsCost);
+  }
+
+  void findMarkets(Ship trader) {
+    for (Mainworld check : mainworlds) {
+      if (distance(evenq_to_axial(x, y), evenq_to_axial(check.x, check.y)) <= trader.maximumJump && check != this) {
+        neighbors.add(check);
+      }
+    }
+  }
+
+  void generateReport(Mainworld route, Ship trader) {
+    int marketModifier = this.findMarketModifier(route);
+    float techDifferential = (techLevel - route.techLevel)/10.0;
+    int cargoCost = goodsCost * trader.cargo;
+    int salePrice = int((5000 + 1000*marketModifier) * (1+techDifferential));
+    int operatingCosts = int((int(trader.cost/240.0) + trader.crewSalary + int(.001*trader.cost/12))/2) + 2000*trader.crew + 100;
+
+    output.println("");
+    output.println("Destination: " + route.name + " " + route.UWP);
+    output.println("");
+    if (route.travelZone.equals("R")) {
+      output.println(char(9) + "+++++++++++++++++++++++++++++++++++++++++");
+      output.println(char(9) + "+       WARNING: WORLD IS RED ZONE      +");
+      output.println(char(9) + "+  ALL TRADE FORBIDDEN BY IMPERIAL LAW  +");
+      output.println(char(9) + "+++++++++++++++++++++++++++++++++++++++++");
+      output.println("");
+    } else if (route.travelZone.equals("A")) {
+      output.println(char(9) + "-----------------------------------");
+      output.println(char(9) + "-    Alert: World is Amber Zone   -");
+      output.println(char(9) + "- Utilize caution in all dealings -");
+      output.println(char(9) + "-----------------------------------");
+      output.println("");
+    }
+    if (match(route.tradeCodes, "Ba")!=null) {
+      output.println(char(9) + "World Barren, no trade possible");
+      return;
+    }
+    if ((route.starport == 'E' || route.starport == 'X') && !route.gasGiant && route.UWP.charAt(3) == '0') {
+      output.println(char(9) + "Return Trip Impossible: No Fuel Avalialbe At Destination");
+      return;
+    }
+
+    output.println(char(9) + "Goods Purchased: "+ trader.cargo +" tons of " + goodsCode);
+    output.println(char(9) + "Cost: " + cargoCost+ "Cr");
+    output.println("");
+
+    switch(route.starport) {
+    case 'A':
+    case 'B':
+      operatingCosts += trader.fuel*refinedFuelCost;
+      output.println(char(9) + "Refined Fuel Purchased at Starport for "+ str(trader.fuel*refinedFuelCost)+ "Cr");
+      break;
+    case 'C':
+    case 'D':
+      operatingCosts += trader.fuel*unrefinedFuelCost;
+      output.println(char(9) + "Unrefined Fuel Purchased at Starport for "+ str(trader.fuel*unrefinedFuelCost)+ "Cr");
+      break;
+    default:
+      if (route.gasGiant) {
+        output.println(char(9) + "Unrefined Fuel Skimmed from Gas Giant");
+      } else {
+        output.println(char(9) + "Unrefined Fuel Skimmed from Water Source at " + route.name);
+      }
+    }
+    output.println("");
+
+    //PASSENGERS
+
+    int saleTotal = salePrice*trader.cargo;
+
+    output.println(char(9) + "Sale Price: " + salePrice + "Cr/ton");
+    output.println(char(9) + "Sale Total: " + saleTotal + "Cr");
+    output.println(char(9) + "Sale Profit: " + str(saleTotal - cargoCost) + "Cr");
+
+    if (salePrice<goodsCost) {
+      output.println(char(9) + "************************************");
+      output.println(char(9) + "* Speculative Trading Unprofitable *");
+      output.println(char(9) + "*    Generic Cargo Used Instead    *");
+      output.println(char(9) + "************************************");
+      cargoCost = 0;
+      saleTotal = trader.cargo * 1000;
+      output.println(char(9) + "Cargo Income: " + saleTotal + "Cr");
+    }
+    output.println("");
+    output.println(char(9) + "Per Jump Operating Costs: " + operatingCosts + "Cr");
+    output.println();
+    output.println(char(9) + "Net Profit/jump: " + str(saleTotal - cargoCost - operatingCosts)+ "Cr");
+  }
+
+  int findMarketModifier(Mainworld route) {
+    int mod = 0;
+
+    if (match(tradeCodes, "Ag") != null) {
+      if (match(route.tradeCodes, "Ag") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "As") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "De") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Hi") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "In") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Lo") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Na") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Ri") != null) {
+        mod ++;
+      }
+    }
+
+    if (match(tradeCodes, "As") != null) {
+      if (match(route.tradeCodes, "As") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Hi") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "In") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Na") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Ri") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Va") != null && !(match(route.tradeCodes, "As") != null)) {
+        mod ++;
+      }
+    }
+    if (match(tradeCodes, "Ba") != null) {
+      if (match(route.tradeCodes, "Ag") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "In") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Na") != null) {
+        mod ++;
+      }
+    }
+    if (match(tradeCodes, "De") != null) {
+      if (match(route.tradeCodes, "De") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Na") != null) {
+        mod ++;
+      }
+    }
+    if (match(tradeCodes, "Fl") != null) {
+      if (match(route.tradeCodes, "Fl") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "In") != null) {
+        mod ++;
+      }
+    }
+    if (match(tradeCodes, "Hi") != null) {
+      if (match(route.tradeCodes, "Hi") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Lo") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Ri") != null) {
+        mod ++;
+      }
+    }
+    if (match(tradeCodes, "Ic") != null) {
+      if (match(route.tradeCodes, "In") != null) {
+        mod ++;
+      }
+    }
+    if (match(tradeCodes, "In") != null) {
+      if (match(route.tradeCodes, "Ag") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "As") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "De") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Fl") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Hi") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "In") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Ni") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Po") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Ri") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Va") != null && !(match(route.tradeCodes, "As") != null)) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Wa") != null) {
+        mod ++;
+      }
+    }
+    if (match(tradeCodes, "Lo") != null) {
+      if (match(route.tradeCodes, "In") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Ri") != null) {
+        mod ++;
+      }
+    }
+    if (match(tradeCodes, "Na") != null) {
+      if (match(route.tradeCodes, "As") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "De") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Va") != null && !(match(route.tradeCodes, "As") != null)) {
+        mod ++;
+      }
+    }
+    if (match(tradeCodes, "Ni") != null) {
+      if (match(route.tradeCodes, "In") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Ni") != null) {
+        mod --;
+      }
+    }
+    if (match(tradeCodes, "Po") != null) {
+      if (match(route.tradeCodes, "Po") != null) {
+        mod --;
+      }
+    }
+    if (match(tradeCodes, "Ri") != null) {
+      if (match(route.tradeCodes, "Ag") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "De") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Hi") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "In") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Na") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Ri") != null) {
+        mod ++;
+      }
+    }
+    if (match(tradeCodes, "Va") != null && !(match(tradeCodes, "As") != null)) {
+      if (match(route.tradeCodes, "As") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "In") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Va") != null && !(match(route.tradeCodes, "As") != null)) {
+        mod ++;
+      }
+    }
+    if (match(tradeCodes, "Wa") != null) {
+      if (match(route.tradeCodes, "In") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Ri") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Wa") != null) {
+        mod ++;
+      }
+    }
+
+    return mod;
+  }
+
+
+  void boilerPlate(Ship trader) {
+
+    output.println("Trade Report for " + name + " Based Shipping");
+    output.println("");
+    output.println("Ship Type: " + trader.type);
+    output.println("Cargo Space: " + str(trader.cargo));
+    output.println("Passenger Space: " + trader.passengers + " Staterooms, and " + trader.lowBerth + " Low Berths");
+    output.println("");
+
+    output.println("Operating Costs");
+    output.println(char(9) + "Montly Payment: " + int(trader.cost/240.0) + "Cr/month");
+    output.println(char(9) + "Crew Salaries: " + trader.crewSalary + "Cr/month");
+    output.println(char(9) + "Fuel: " + str(trader.fuel*refinedFuelCost) + "Cr/jump for refined, " + str(trader.fuel*unrefinedFuelCost) + "Cr/jump for unrefined");
+    output.println(char(9) + "Maintenance: " + str(int(.001*trader.cost)) + "Cr/year, " + str(int(.001*trader.cost/12)) + "Cr/month");
+    output.println(char(9) + "Lifesupport: " + str(2000*trader.crew) + "Cr/jump for crew, 2000Cr/Non-Low Passenger + 100Cr/Low Passenger");
+    output.println(char(9) + "Berthing Costs: 100Cr/jump");
+    output.println("");
+
+    output.println("Goods Avaliable: " + goodsCode);
+    output.println("Avaliable Markets in J-"+trader.maximumJump);
+    for (Mainworld route : neighbors) {
+      output.println(char(9) + route.hex + " " + route.name + " (" + route.UWP + ") " + route.tradeCodes + ", Market Mod: " + findMarketModifier(route) + ", Tech Diff: " + str((techLevel-route.techLevel)*10)+ "%");
+    }
+    if (travelZone.equals("R")) {
+      output.println("");
+      output.println("+++++++++++++++++++++++++++++++++++++++++");
+      output.println("+   WARNING: SOURCE WORLD IS RED ZONE   +");
+      output.println("+  ALL TRADE FORBIDDEN BY IMPERIAL LAW  +");
+      output.println("+++++++++++++++++++++++++++++++++++++++++");
+    } else if (travelZone.equals("A")) {
+      output.println("");
+      output.println("-------------------------------------");
+      output.println("- Alert: Source World is Amber Zone -");
+      output.println("- Utilize caution in all dealings   -");
+      output.println("-------------------------------------");
+    }
+  }
+}
+class object {
+  int type, orbit, size, atmo, hydro, pop, gov, law, tech, satellites, minOrbit, maxOrbit, HZ;
+  int primaryTypeRoll, primarySizeRoll, orbitType, avaliableOrbits, MWPop, MWgov, MWlaw, MWtech, MWatmo;
+  int Ix = 0, gasGiants, planetoidBelts, resources, labor, infrastructure, efficiency;
+  int heterogeneity, acceptance, strangeness, symbols, goodsCost;
+  char portType, zone;
+  boolean MW = false, satellite = false, ring = false;
+  String UWP, name, stellarData, bases = "", tradeCodes = "", PBG = "", Ex, Cx, nobility = "B";
+  String goods;
+  object parent;
+  ArrayList<object> children = new ArrayList<object>();
+  IntList occupiedOrbit = new IntList();
+  String orbitString = "";
+  //Object Type List
+  //0: Star
+  //1: Planet
+  //2: Gas Giant
+  //3: Belt
+  //4: Satellite
+
+  //Orbit Type List
+  //0: Inner (Orbit<HZ)
+  //1: Habitable(Orbit=HZ)
+  //2: Outer (Orbit>HZ)
+
+  object(int objectType, object parentBody, int orbitIn) {
+    type = objectType;
+    parent =  parentBody;
+    orbit = orbitIn;
+    name = nextName();
+    pop = -10;
+
+    if (type == 0) {
+      if (parent == null) {
+        generatePrimary();
+      } else {
+        generateCompanion();
+      }
+    } else if (type == 1) {
+      generatePlanet();
+    } else if (type == 2) {
+      generateGasGiant();
+    } else if (type == 3) {
+      generateBelt();
+    } else if (type == 4) {
+      generateSatellite();
+    }
+  }
+
+  void generatePrimary() {
+    primaryTypeRoll = dieRoll(2);
+    primarySizeRoll = dieRoll(2);
+
+    String stellarType, stellarSize;
+    stellarType = primaryStarType[primaryTypeRoll]+ str((dieRoll(1, 2)-1)*5);
+    stellarSize = primaryStarSize[primarySizeRoll];
+
+    if ((stellarType.equals("K5") || stellarType.equals("M0") || stellarType.equals("M5")) && stellarSize.equals("IV")) {
+      stellarSize = "V";
+    }
+
+    if ((stellarType.equals("B0") || stellarType.equals("B5") || stellarType.equals("A0") || stellarType.equals("A5")|| stellarType.equals("F0")) && stellarSize.equals("VI")) {
+      stellarSize = "V";
+    }
+
+    if (!stellarSize.equals("D")) {
+      stellarData = stellarType + " " + stellarSize;
+    } else {
+      stellarType = stellarType.substring(0, 1);
+      stellarData = stellarType + " " + stellarSize;
+    }
+
+    UWP = stellarData;
+
+    maxOrbit =  dieRoll(2);
+    if (stellarSize.equals("III")) {
+      maxOrbit += 4;
+    } else if (stellarSize.equals("II") || stellarSize.equals("Ib") || stellarSize.equals("Ia")) {
+      maxOrbit += 8;
+    }
+    if (stellarType.equals("M")) {
+      maxOrbit -= 4;
+    } else if (stellarType.equals("K")) {
+      maxOrbit -= 2;
+    }
+
+    if (maxOrbit < 1) {
+      maxOrbit = 1;
+    }
+
+    int orbitIndexType, orbitIndexSize;
+
+    switch(stellarType) {
+    case "B":
+    case "B0":
+      orbitIndexType = 0;
+      break;
+    case "A":
+    case "B5":
+      orbitIndexType = 1;
+      break;
+    case "F":
+    case "A0":
+      orbitIndexType = 2;
+      break;
+    case "G":
+    case "A5":
+      orbitIndexType = 3;
+      break;
+    case "K":
+    case "F0":
+      orbitIndexType = 4;
+      break;
+    case "M":
+    case "F5":
+      orbitIndexType = 5;
+      break;
+    case "G0":
+      orbitIndexType = 6;
+      break;
+    case "G5":
+      orbitIndexType = 7;
+      break;
+    case "K0":
+      orbitIndexType = 8;
+      break;
+    case "K5":
+      orbitIndexType = 9;
+      break;
+    case "M0":
+      orbitIndexType = 10;
+      break;
+    case "M5":
+      orbitIndexType = 11;
+      break;
+    default:
+      orbitIndexType = 12;
+    }
+
+    switch(stellarSize) {
+    case "Ia":
+      orbitIndexSize = 0;
+      break;
+    case "Ib":
+      orbitIndexSize = 1;
+      break;
+    case "II":
+      orbitIndexSize = 2;
+      break;
+    case "III":
+      orbitIndexSize = 3;
+      break;
+    case "IV":
+      orbitIndexSize = 4;
+      break;
+    case "V":
+      orbitIndexSize = 5;
+      break;
+    case "VI":
+      orbitIndexSize = 6;
+      orbitIndexType -= 5;
+      break;
+    case "D":
+      orbitIndexSize = 7;
+      break;
+    default:
+      orbitIndexSize = 8;
+    }
+
+
+    minOrbit = firstAvaliableOrbit[orbitIndexSize][orbitIndexType];
+    HZ = habitableOrbit[orbitIndexSize][orbitIndexType];
+    avaliableOrbits = maxOrbit-minOrbit;
+
+    int natureRoll = dieRoll(2);
+    if (natureRoll>=8) {
+      children.add(new object(0, this, -5));
+      avaliableOrbits --;
+    }
+
+    gasGiants = 0;
+    if (dieRoll(2) <= 9) {
+      switch(dieRoll(2)) {
+      case 1:
+      case 2:
+      case 3:
+        gasGiants = 1;
+        break;
+      case 4:
+      case 5:
+        gasGiants = 2;
+        break;
+      case 6:
+      case 7:
+        gasGiants = 3;
+        break;
+      case 8:
+      case 9:
+      case 10:
+        gasGiants = 4;
+        break;
+      case 11:
+      case 12:
+        gasGiants = 5;
+      }
+    }
+
+    if (gasGiants > avaliableOrbits && avaliableOrbits >0) {
+      gasGiants = avaliableOrbits;
+    } else if (avaliableOrbits<0) {
+      gasGiants = 0;
+    }
+
+    avaliableOrbits -= gasGiants;
+
+
+    planetoidBelts = 0;
+    if (dieRoll(2)-gasGiants <=6) {
+      switch(dieRoll(2)-gasGiants) {
+      case 1:
+      case 2:
+      case 3:
+      case 4:
+      case 5:
+      case 6:
+        planetoidBelts = 2;
+        break;
+      case 7:
+      case 8:
+      case 9:
+      case 10:
+      case 11:
+      case 12:
+        planetoidBelts = 1;
+        break;
+      default:
+        planetoidBelts = 3;
+      }
+    }
+
+    if (planetoidBelts > avaliableOrbits && avaliableOrbits>0) {
+      planetoidBelts = avaliableOrbits;
+    } else if (avaliableOrbits<0) {
+      planetoidBelts = 0;
+    }
+    avaliableOrbits -= planetoidBelts;
+
+    PBG = str(gasGiants)+str(planetoidBelts);
+
+    int orbitOut;
+    for (int i = 0; i < gasGiants; i++) {
+      orbitOut = insertOrbit(occupiedOrbit, dieRoll(1, (maxOrbit-HZ), HZ-1), this);
+      children.add(new object(2, this, orbitOut));
+      occupiedOrbit.append(orbitOut);
+    }
+    for (int i = 0; i < planetoidBelts; i++) {
+      orbitOut = insertOrbit(occupiedOrbit, dieRoll(1, (maxOrbit-minOrbit), minOrbit-1), this);
+      children.add(new object(3, this, orbitOut));
+      occupiedOrbit.append(orbitOut);
+    }
+
+    for (int i = 0; i<=maxOrbit; i++) {
+      if (!occupiedOrbit.hasValue(i)) {
+        children.add(new object(1, this, i));
+      }
+    }
+  }
+
+  object MWSearch(int largestFound) {
+    int maxPopFound = largestFound;
+    object MWcandidate = null;
+    if (children  != null) {
+      for (object candidate : children) {
+        object searchCandidate  = candidate.MWSearch(maxPopFound);
+        if (searchCandidate != null) {
+          if (searchCandidate.pop > maxPopFound) {
+            maxPopFound = searchCandidate.pop;
+            MWcandidate = searchCandidate;
+          }
+        }
+      }
+    }
+    if (pop > maxPopFound) {
+      MWcandidate = this;
+    }
+    return MWcandidate;
+  }
+
+  void generateMW() {
+    MW = true;
+    bases = "";
+    tradeCodes = "";
+    goodsCost = 4000;
+    gov = dieRoll(2)-7+pop;
+    law = dieRoll(2)-7+pop;
+    tech = dieRoll(1);
+    if (pop>0) {
+      primary.PBG = str(dieRoll(1, 9)) + primary.PBG;
+      labor = pop -1;
+    } else {
+      primary.PBG = "0" + primary.PBG;
+      labor = 0;
+    }
+    if (pop<=6) {
+      Ix--;
+    }
+
+    zone = '-';
+
+    if (law > 15) {
+      law = 15;
+    }
+    switch(dieRoll(2)) {
+    case 2:
+    case 3:
+    case 4:
+      portType = 'A';
+      if (dieRoll(2) >= 8) {
+        bases += "N";
+      }
+      if (dieRoll(2)-3 >= 7) {
+        bases += "S";
+      }
+      tech += 6;
+      Ix++;
+      goodsCost -=1000;
+      break;
+    case 5:
+    case 6:
+      portType = 'B';
+      if (dieRoll(2) >= 8) {
+        bases += "N";
+      }
+      if (dieRoll(2)-2 >= 7) {
+        bases += "S";
+      }
+      tech += 4;
+      Ix++;
+      break;
+    case 7:
+    case 8:
+      portType = 'C';
+      if (dieRoll(2)-1 >= 7) {
+        bases += "S";
+      }
+      tech += 2;
+      goodsCost +=1000;
+      break;
+    case 9:
+      portType = 'D';
+      if (dieRoll(2) >= 7) {
+        bases += "S";
+      }
+      Ix--;
+      goodsCost +=2000;
+      break;
+    case 10:
+    case 11:
+      portType = 'E';
+      Ix--;
+      goodsCost +=3000;
+      break;
+    default:
+      portType = 'X';
+      tech -=4;
+      Ix--;
+      goodsCost += 5000;
+    }
+
+    if (bases.equals("")) {
+      bases = "-";
+    } else if (bases.equals("NS")) {
+      Ix++;
+    }
+
+    if (size <= 1) {
+      tech += 2;
+    } else if (size<=4) {
+      tech += 1;
+    }
+    if (atmo <= 3 || atmo >=10 && atmo != 15) {
+      tech += 1;
+    }
+    if (hydro == 9) {
+      tech += 1;
+    } else if (hydro == 10) {
+      tech += 2;
+    }
+    if (pop>=1 && pop <=5) {
+      tech += 1;
+    } else if (pop == 9) {
+      tech += 2;
+    } else if (pop == 10) {
+      tech += 4;
+    }
+    if (gov == 0 || gov == 5) {
+      tech +=1;
+    } else if (gov == 13) {
+      tech -=2;
+    }
+
+    if (tech>15) {
+      tech = 15;
+    } else if (tech<0) {
+      tech = 0;
+    }
+    if (tech>=10) {
+      Ix++;
+    } else if (tech <= 8) {
+      Ix--;
+    }
+
+
+    if (atmo >=4 && atmo <= 8 && hydro >= 4 && hydro <= 8 && pop >=5 && pop<=7) {
+      tradeCodes += "Ag ";
+      Ix++;
+      goodsCost -=1000;
+    }
+    if (size == 0 && type == 3) {
+      tradeCodes += "As ";
+      goodsCost -=1000;
+    }
+    if (pop == 0 && gov == 0 && law == 0) {
+      tradeCodes += "Ba ";
+      goodsCost +=1000;
+    }
+    if (hydro == 0 && atmo >= 2) {
+      tradeCodes += "De ";
+      goodsCost +=1000;
+    }
+    if (atmo>=10 && hydro >=1) {
+      tradeCodes += "Fl ";
+      goodsCost +=1000;
+    }
+    if (pop >= 9) {
+      tradeCodes += "Hi ";
+      goodsCost -=1000;
+    }
+    if (atmo <= 1 && hydro >= 1) {
+      tradeCodes += "Ic ";
+    }
+    if ((atmo <= 2 || atmo == 4 || atmo == 7 || atmo == 9)&& pop >= 9) {
+      tradeCodes += "In ";
+      Ix++;
+      goodsCost -=1000;
+    }
+    if (pop<=3) {
+      tradeCodes += "Lo ";
+      goodsCost +=1000;
+    }
+    if (atmo <= 3 && hydro <= 3 && pop >= 6) {
+      tradeCodes += "Na ";
+    }
+    if (pop<= 6) {
+      tradeCodes += "Ni ";
+      goodsCost +=1000;
+    }
+    if (atmo >= 2 && atmo <= 5 && hydro <= 3) {
+      tradeCodes += "Po ";
+      goodsCost -=1000;
+    }
+    if ((atmo == 6 || atmo == 8) && pop >= 6 && pop <= 8 && gov >=4 && gov <= 9) {
+      tradeCodes += "Ri ";
+      Ix++;
+      goodsCost +=1000;
+    }
+    if (atmo == 0) {
+      tradeCodes += "Va ";
+      goodsCost +=1000;
+    }
+    if (hydro == 10) {
+      tradeCodes += "Wa ";
+    }
+
+    goodsCost += 100*tech;
+
+
+    if (!tradeCodes.equals("")) {
+      tradeCodes = tradeCodes.substring(0, tradeCodes.length()-1);
+    }
+    
+    goods = portType + "-" + hex(tech,1)+ " " + tradeCodes + " Cr" + goodsCost;
+    
+    resources = dieRoll(2);
+    if (tech>=8) {
+      resources = resources + primary.gasGiants + primary.planetoidBelts;
+    }
+
+    if (pop >=1 && pop <= 3) {
+      infrastructure = Ix;
+    } else if (pop >=4 &&  pop <=6) {
+      infrastructure = Ix + dieRoll(1);
+    } else if (pop >=7) {
+      infrastructure = Ix + dieRoll(2);
+    } else {
+      infrastructure = 0;
+    }
+
+    if (infrastructure < 0) {
+      infrastructure = 0;
+    }
+
+    efficiency = flux();
+
+    if (pop > 0) {
+      heterogeneity = pop + flux();
+      if (heterogeneity<1) {
+        heterogeneity = 1;
+      }
+      acceptance = pop + Ix;
+      if (acceptance < 1) {
+        acceptance = 1;
+      }
+      strangeness = 5 + flux();
+      if (strangeness < 1) {
+        strangeness = 1;
+      }
+      symbols = flux() + tech;
+      if (symbols < 1) {
+        symbols = 1;
+      }
+    } else {
+      heterogeneity = 0;
+      acceptance = 0;
+      strangeness = 0;
+      symbols = 0;
+    }
+
+    if (law+gov>=20) {
+      zone = 'A';
+    }
+    if (law+gov>=22) {
+      zone = 'R';
+    }
+    if (portType == 'X') {
+      if (dieRoll(2)<12) {
+        zone = 'R';
+      } else {
+        zone = 'A';
+      }
+    }
+
+
+
+    if (efficiency<0) {
+      Ex = "(" + hex(resources, 1) + hex(labor, 1) + hex(infrastructure, 1) + str(efficiency) + ")";
+    } else {
+      Ex = "(" + hex(resources, 1) + hex(labor, 1) + hex(infrastructure, 1) + "+" + str(efficiency) + ")";
+    }
+
+    Cx = "[" + hex(heterogeneity, 1) + hex(acceptance, 1) + hex(strangeness, 1) + hex(symbols, 1) +"]";
+
+    if (match(tradeCodes, "Ag") != null || match(tradeCodes, "Ri") != null) {
+      nobility += "C";
+    }
+    if (match(tradeCodes, "In") != null || match(tradeCodes, "Hi") != null) {
+      nobility += "E";
+    }
+    if (Ix >= 4) {
+      nobility += "F";
+    }
+
+
+
+    generateUWP();
+
+    primary.MWPop = pop;
+    primary.MWgov = gov;
+    primary.MWlaw = law;
+    primary.MWtech = tech;
+    primary.MWatmo = atmo;
+    primary.bases = bases;
+    primary.tradeCodes = tradeCodes;
+
+    primary.generateSubordinates();
+    //mainworlds.add(this);
+  }
+
+  void generateUWP() {
+    if (size == 0 && type != 3 && !ring) {
+      UWP = str(portType) + 'S'+ hex(atmo, 1) + hex(hydro, 1)+hex(pop, 1)+hex(gov, 1)+hex(law, 1) + "-" + hex(tech, 1);
+    } else if (ring) {
+      UWP = str(portType) +'R' + hex(atmo, 1) + hex(hydro, 1)+hex(pop, 1)+hex(gov, 1)+hex(law, 1) + "-" + hex(tech, 1);
+    } else if (type == 3) {
+      UWP = str(portType) +'0' + hex(atmo, 1) + hex(hydro, 1)+hex(pop, 1)+hex(gov, 1)+hex(law, 1) + "-" + hex(tech, 1);
+    } else {
+      UWP = str(portType)+ hex(size, 1) + hex(atmo, 1) + hex(hydro, 1)+hex(pop, 1)+hex(gov, 1)+hex(law, 1) + "-" + hex(tech, 1);
+    }
+  }
+
+  void generateSubordinates() {
+    if (children != null) {
+      for (object child : children) {
+        child.generateSubordinates();
+      }
+    }
+    if (!MW) {
+      if (type == 1 || type == 3 || type == 4) {
+        if (pop>0) {
+          int govRoll = dieRoll(1);
+          if (primary.MWgov>=7) {
+            govRoll +=1;
+          }
+          if (govRoll < 5) {
+            gov = govRoll-1;
+          }
+          if (govRoll >= 5 || primary.MWgov == 6) {
+            gov = 6;
+          }
+
+          law = dieRoll(1)-3+primary.MWlaw;
+          if (law<0) {
+            law = 0;
+          }
+
+          tech = primary.MWtech-1;
+
+          if (MWtech >= 9) {
+            int labRoll = dieRoll(2);
+            if (MWtech >= 10) {
+              labRoll += 2;
+            }
+            if (labRoll >= 11) {
+              bases += "L";
+              tech = primary.MWtech;
+            }
+          }
+
+          int mBaseRoll = dieRoll(2);
+          if (primary.MWPop >= 8) {
+            mBaseRoll ++;
+          }
+          if (atmo == primary.MWatmo) {
+            mBaseRoll += 2;
+          }
+          if (match(primary.bases, "N")!=null || match(primary.bases, "S")!=null) {
+            mBaseRoll ++;
+          }
+          if (mBaseRoll >= 12 && match(primary.tradeCodes, "Po") != null) {
+            bases += "M";
+            tech = primary.MWtech;
+          }
+
+          if (orbit == parent.HZ && atmo>= 4 && atmo<=9 && hydro >=4 && hydro <= 8 && pop >=2) {
+            tradeCodes += "Fa ";
+          }
+          if (match(primary.tradeCodes, "In")!=null && pop >= 2) {
+            tradeCodes += "Mi ";
+          }
+          if (gov == 6  && pop >=5) {
+            tradeCodes += "Co ";
+          }
+          if (!tradeCodes.equals("")) {
+            tradeCodes = tradeCodes.substring(0, tradeCodes.length()-1);
+          }
+          int portRoll = dieRoll(1);
+          if (pop >= 6) {
+            portRoll +=2;
+          } else if (pop == 1) {
+            portRoll -=2;
+          } else if (pop == 0) {
+            portRoll -=3;
+          }
+          if (portRoll < 1) {
+            portRoll = 1;
+          } else if (portRoll>6) {
+            portRoll = 6;
+          }
+          switch(portRoll) {
+          case 1:
+            portType = 'Y';
+            break;
+          case 2:
+            portType = 'Y';
+            break;
+          case 3:
+            portType = 'H';
+            break;
+          case 4:
+            portType = 'G';
+            break;
+          case 5:
+            portType = 'G';
+            break;
+          default:
+            portType = 'F';
+          }
+          if (tech < 0) {
+            tech = 0;
+          }
+        } else {
+          gov = 0;
+          law = 0;
+          tech = 0;
+          portType = 'Y';
+        }
+        generateUWP();
+      }
+    }
+  }
+
+  void orderChildren() {
+    if (children != null) {
+      for (int x = 0; x< children.size(); x++) {
+        for (int y = 1; y< children.size()-x; y++) {
+          object temp1, temp2;
+          temp1= children.get(y-1);
+          temp2= children.get(y);
+          if (temp1.orbit > temp2.orbit) {
+            children.set(y-1, temp2);
+            children.set(y, temp1);
+          }
+        }
+      }
+      for (object child : children) {
+        child.orderChildren();
+      }
+    }
+  }
+
+
+  void generateCompanion() {
+    int companionTypeRoll = dieRoll(2, 6, parent.primaryTypeRoll);
+    int companionSizeRoll = dieRoll(2, 6, parent.primarySizeRoll);
+    String stellarType, stellarSize;
+    int companionOrbitRoll;
+
+    if (companionTypeRoll<=12) {
+      stellarType = str(companionStarType[companionTypeRoll]);
+    } else {
+      stellarType = "M";
+    }
+
+    if (companionSizeRoll<=12) {
+      stellarSize = companionStarSize[companionSizeRoll];
+    } else {
+      stellarSize = "D";
+    }
+
+
+
+    if ((stellarType.equals("K5") || stellarType.equals("M0") || stellarType.equals("M5")) && stellarSize.equals("IV")) {
+      stellarSize = "V";
+    }
+
+    if ((stellarType.equals("B0") || stellarType.equals("B5") || stellarType.equals("A0") || stellarType.equals("A5")|| stellarType.equals("F0")) && stellarSize.equals("VI")) {
+      stellarSize = "V";
+    }
+
+    if (!stellarSize.equals("D")) {
+      stellarData = stellarType + " " + stellarSize;
+    } else {
+      stellarType = stellarType.substring(0, 1);
+      stellarData = stellarSize + stellarType;
+    }
+
+    UWP = stellarData;
+
+    int orbitIndexType, orbitIndexSize;
+
+    switch(stellarType) {
+    case "B":
+    case "B0":
+      orbitIndexType = 0;
+      break;
+    case "A":
+    case "B5":
+      orbitIndexType = 1;
+      break;
+    case "F":
+    case "A0":
+      orbitIndexType = 2;
+      break;
+    case "G":
+    case "A5":
+      orbitIndexType = 3;
+      break;
+    case "K":
+    case "F0":
+      orbitIndexType = 4;
+      break;
+    case "M":
+    case "F5":
+      orbitIndexType = 5;
+      break;
+    case "G0":
+      orbitIndexType = 6;
+      break;
+    case "G5":
+      orbitIndexType = 7;
+      break;
+    case "K0":
+      orbitIndexType = 8;
+      break;
+    case "K5":
+      orbitIndexType = 9;
+      break;
+    case "M0":
+      orbitIndexType = 10;
+      break;
+    case "M5":
+      orbitIndexType = 11;
+      break;
+    default:
+      orbitIndexType = 12;
+    }
+
+    switch(stellarSize) {
+    case "Ia":
+      orbitIndexSize = 0;
+      break;
+    case "Ib":
+      orbitIndexSize = 1;
+      break;
+    case "II":
+      orbitIndexSize = 2;
+      break;
+    case "III":
+      orbitIndexSize = 3;
+      break;
+    case "IV":
+      orbitIndexSize = 4;
+      break;
+    case "V":
+      orbitIndexSize = 5;
+      break;
+    case "VI":
+      orbitIndexSize = 6;
+      orbitIndexType = 5;
+      break;
+    case "D":
+      orbitIndexSize = 7;
+      break;
+    default:
+      orbitIndexSize = 8;
+    }
+
+    HZ = habitableOrbit[orbitIndexSize][orbitIndexType];
+
+    companionOrbitRoll = dieRoll(2);
+
+    if (companionOrbitRoll<=3) {
+      orbit = -1;
+    } else if (companionOrbitRoll <= 6) {
+      orbit = companionOrbitRoll -3;
+    } else if (companionOrbitRoll <12) {
+      orbit = companionOrbitRoll -3 + dieRoll(1);
+    } else {
+      orbit = 99;
+    }
+
+
+    parent.occupiedOrbit.append(orbit);
+    parent.occupiedOrbit.append(orbit+1);
+    parent.occupiedOrbit.append(orbit+2);
+
+    if (orbit!=99 && orbit != -1) {
+      float  innerLimit = 0;
+      if (orbit%2==1) {
+        innerLimit = (orbit/2)+.5;
+      } else {
+        innerLimit = orbit/2;
+      }
+      int outerLimit = orbit +2;
+
+      for (int i = 0; i <= parent.maxOrbit; i++) {
+        if (i>innerLimit && i<outerLimit) {
+          parent.occupiedOrbit.append(i);
+        }
+      }
+
+      maxOrbit = orbit/2;
+      for (int i = 0; i<=maxOrbit; i++) {
+        if (!occupiedOrbit.hasValue(i)) {
+          children.add(new object(1, this, i));
+        }
+      }
+    }
+  }
+
+  void generatePlanet() {
+    worlds ++;
+    String parentStellarData;
+    if (parent.stellarData != null) {
+      parentStellarData = parent.stellarData;
+    } else {
+      parentStellarData = parent.parent.stellarData;
+    }
+
+    int parentHZ = parent.HZ;
+
+
+
+    if (orbit< parentHZ) {
+      orbitType = 0;
+    } else if (orbit > parentHZ) {
+      orbitType = 2;
+    } else {
+      orbitType = 1;
+    }
+
+    size = dieRoll(2)-2;
+    if (orbit == 0) {
+      size -= 5;
+    } else if (orbit == 1) {
+      size -= 4;
+    } else if (orbit == 2) {
+      size -= 2;
+    }
+    if (match(parentStellarData, "M") != null) {
+      size -=2;
+    }
+    if (size < 0) {
+      size = 0;
+    }
+
+    atmo = dieRoll(2)-7+size;
+    if (orbitType != 1) {
+      atmo -=2;
+    }
+    if (orbitType == 2 && dieRoll(2) == 12) {
+      atmo = 10;
+    }
+    if (size <= 1 || atmo < 0) {
+      atmo = 0;
+    }
+
+    hydro = dieRoll(2)-7+size;
+    if (orbitType == 2) {
+      hydro -= 4;
+    }
+    if (atmo<= 1 || atmo>=10) {
+      hydro -= 4;
+    }
+    if (hydro < 0 || size <= 1 || orbitType == 0) {
+      hydro = 0;
+    }
+    if (hydro > 10) {
+      hydro = 10;
+    }
+
+    pop = dieRoll(2) - 2;
+    if (orbitType == 0) {
+      pop -= 5;
+    } else if (orbitType == 2) {
+      pop -= 3;
+    }
+    if (!(atmo == 0 || atmo == 5 || atmo == 6 || atmo == 8)) {
+      pop -= 2;
+    }
+
+    if (pop<0) {
+      pop = 0;
+    }
+
+    if (size > 0) {
+      satellites = dieRoll(1) - 3;
+    }
+    if (satellites > 0) {
+      for (int i = 1; i<=satellites; i++) {
+        children.add(new object(4, this, 0));
+      }
+    }
+  }
+
+  void generateGasGiant() {
+    worlds ++;
+    if (dieRoll(1) >= 4) {
+      size = 30; //Large Gas Giant
+      UWP = "LGG";
+    } else {
+      size = 20; //Small Gas Giant
+      UWP = "SGG";
+    }
+    int satellites = dieRoll(2);
+    if (size == 20) {
+      satellites -= 4;
+    }
+
+    int parentHZ = parent.HZ;
+
+    if (orbit< parentHZ) {
+      orbitType = 0;
+    } else if (orbit > parentHZ) {
+      orbitType = 2;
+    } else {
+      orbitType = 1;
+    }
+    if (satellites > 0) {
+      for (int i = 1; i<=satellites; i++) {
+        children.add(new object(4, this, 0));
+      }
+    }
+  }
+
+  void generateBelt() {
+    worlds ++;
+    int parentHZ = parent.HZ;
+    size = 0;
+    atmo = 0;
+    hydro = 0;
+    if (orbit< parentHZ) {
+      orbitType = 0;
+    } else if (orbit > parentHZ) {
+      orbitType = 2;
+    } else {
+      orbitType = 1;
+    }
+
+    pop = dieRoll(2)-2;
+    if (orbitType == 0) {
+      pop -= 5;
+    } else if (orbitType == 2) {
+      pop -= 3;
+    }
+
+    if (pop < 0) {
+      pop = 0;
+    }
+  }
+
+  void generateSatellite() {
+    orbitType = parent.orbitType;
+    satellite = true;
+    if (parent.size == 30) {
+      size  = dieRoll(2)-4;
+    } else if (parent.size == 20) {
+      size = dieRoll(2) - 6;
+    } else {
+      size = parent.size - dieRoll(1);
+    }
+    if (size == 0) {
+      ring = true;
+    } else if (size<0) {
+      size = 0;
+    }
+
+    int satelliteOrbit = 0;
+    if (!ring) {
+      int orbitRoll = dieRoll(2);
+      if (parent.size>10 && orbitRoll == 12) {
+        satelliteOrbit = (dieRoll(2)+1)*25;
+        while (parent.occupiedOrbit.hasValue(satelliteOrbit)) {
+          satelliteOrbit = (dieRoll(2)+1)*25;
+        }
+        parent.occupiedOrbit.append(satelliteOrbit);
+        orbit = satelliteOrbit;
+      } else if (orbitRoll >= 8) {
+        satelliteOrbit = (dieRoll(2)+1)*5;
+        while (parent.occupiedOrbit.hasValue(satelliteOrbit)) {
+          satelliteOrbit = (dieRoll(2)+1)*5;
+        }
+        parent.occupiedOrbit.append(satelliteOrbit);
+        orbit = satelliteOrbit;
+      } else {
+        satelliteOrbit = (dieRoll(2)+1);
+        while (parent.occupiedOrbit.hasValue(satelliteOrbit)) {
+          satelliteOrbit = (dieRoll(2)+1);
+        }
+        parent.occupiedOrbit.append(satelliteOrbit);
+        orbit = satelliteOrbit;
+      }
+    } else {
+      int orbitRoll = dieRoll(1);
+      if (orbitRoll <= 3) {
+        satelliteOrbit = 1;
+      } else if (orbitRoll <= 5) {
+        satelliteOrbit = 2;
+      } else {
+        satelliteOrbit = 3;
+      }
+      while (parent.occupiedOrbit.hasValue(satelliteOrbit)) {
+        satelliteOrbit++;
+      }
+      parent.occupiedOrbit.append(satelliteOrbit);
+      orbit = satelliteOrbit;
+    }
+
+
+    atmo = dieRoll(2)-7+size;
+    if (orbitType != 1) {
+      atmo -=4;
+    }
+    if (atmo<0 || size ==0) {
+      atmo = 0;
+    }
+
+    hydro = dieRoll(2)-7+size;
+    if (orbitType == 0) {
+      hydro -= 4;
+    } else if (orbitType == 2) {
+      hydro -= 2;
+    }
+    if (atmo<=1 || atmo>=10) {
+      hydro -= 4;
+    }
+    if (hydro < 0  || size == 0) {
+      hydro = 0;
+    }
+
+    pop = dieRoll(2)-2;
+    if (orbitType == 0) {
+      pop -= 6;
+    } else if (orbitType == 2) {
+      pop -= 5;
+    }
+    if (size <=4) {
+      pop -= 2;
+    }
+    if (atmo != 5 && atmo != 6 && atmo != 8) {
+      pop -= 2;
+    }
+    if (ring || pop < 0) {
+      pop = 0;
+    }
+  }
+
+  void setOutRow() {
+    TableRow SystemOutRow = SystemOutput.addRow();
+
+    if (orbit == -2) {
+      orbitString = "P";
+    } else if (orbit == -1) {
+      orbitString = "C";
+    } else if (parent != primary && parent.type == 0) {
+      orbitString = "B" + str(parent.orbit)+ ">" + orbit;
+    } else if (parent != primary) {
+      orbitString = parent.orbitString + ">" + orbit;
+    } else {
+      orbitString = str(orbit);
+    }
+    SystemOutRow.setString("Orbit", orbitString);
+    SystemOutRow.setString("Name", name);
+    SystemOutRow.setString("UWP", UWP);
+    SystemOutRow.setString("Bases", bases);
+    SystemOutRow.setString("Trade Codes", tradeCodes);
+
+    if (children != null) {
+      for (object child : children) {
+        child.setOutRow();
+      }
+    }
+
+    if (MW) {
+      SectorOutRow.setString("Name", name);
+      SectorOutRow.setString("UWP", UWP);
+      SectorOutRow.setString("Remarks", tradeCodes);
+      SectorOutRow.setString("Bases", bases);
+      SectorOutRow.setString("Stars", primary.UWP);
+      SectorOutRow.setString("PBG", primary.PBG);
+      SectorOutRow.setString("Allegiance", "Im");
+      SectorOutRow.setString("Ix", "{" + str(Ix) + "}");
+      SectorOutRow.setString("Ex", Ex);
+      SectorOutRow.setString("Cx", Cx);
+      SectorOutRow.setString("W", str(worlds));
+      SectorOutRow.setString("Nobility", nobility);
+      SectorOutRow.setString("Zone", str(zone));
+      //SectorOutRow.setString("Goods", goods);
+      autoHotKey.append("SendText \"" + name + "\"");
+      name = padToLength(name, 20);
+      tradeCodes = padToLength(tradeCodes, 18+3);
+      bases = padToLength(bases, 2);
+      String stringIx = padToLength("{ "+ str(Ix) + " }", 6);
+      nobility = padToLength(nobility, 5);
+
+      SectorDataOutput.append(hexNumber + " "+ name + " " + UWP + " "+ tradeCodes + stringIx + " " + Ex +  " " + Cx + " - "+ bases + " - "+ primary.PBG + " " + padToLength(str(worlds), 2) + " Im   " + primary.UWP);
+      autoHotKey.append("Send \"{Enter}\"");
+      autoHotKey.append("Sleep 10000");
+      autoHotKey.append("SendText \"n\"");
+      autoHotKey.append("Sleep 1000");
+      autoHotKey.append("Send \"{Enter}\"");
+    }
+  }
+}
+
+class Ship{
+  String type;
+  int cargo, fuel, maximumJump, cost, crew, passengers, lowBerth, crewSalary;
+  
+  Ship(String shipType, int cargoSpace, int fuelLoad, int maxJump, int shipCost, int minimumCrew, int crewPay, int passengerSpace, int lowPassengers){
+    type = shipType;
+    cargo = cargoSpace;
+    fuel = fuelLoad;
+    maximumJump = maxJump;
+    cost = shipCost;
+    crew = minimumCrew;
+    passengers = passengerSpace;
+    lowBerth = lowPassengers;
+    crewSalary = crewPay;
+  }
+}
+
+//Generic die rolling function. Imput dice number, followed by the number of faces on the die,
+//followed by any dice modifier. By default the function won't return a value less that 0, but this
+//can be enabled by setting lessThanZero to true. There is also a version for no modifer, as this
+//can't be less than 0, it just returns the sum of the dice.
+
+int dieRoll(int dice, int faces, int mod) {
+  int sum = 0;
+  for (int i = 1; i <= dice; i++) {
+    sum = sum + int(random(faces) +1);
+  }
+  sum += mod;
+  if (sum < 0) {
+    return 0;
+  } else {
+    return sum;
+  }
+}
+
+int dieRoll(int dice) {
+  return dieRoll(dice, 6);
+}
+
+int dieRoll(int dice, int faces, int mod, boolean lessThanZero) {
+  int sum = 0;
+  for (int i = 1; i <= dice; i++) {
+    sum = sum + int(random(faces) +1);
+  }
+  sum += mod;
+  if (lessThanZero) {
+    return sum;
+  }
+  if (sum < 0) {
+    return 0;
+  } else {
+    return sum;
+  }
+}
+
+int dieRoll(int dice, int faces) {
+  int sum = 0;
+  for (int i = 1; i <= dice; i++) {
+    sum = sum + int(random(faces) +1);
+  }  
+  return sum;
+}
+
+int flux() {
+  return dieRoll(1)-dieRoll(1);
+}
+
+int insertOrbit(IntList occupiedOrbits, int desiredOrbit, object parent) {
+  if (!occupiedOrbits.hasValue(desiredOrbit)) {
+    return desiredOrbit;
+  } else {
+    int offset = 1;
+    while (!occupiedOrbits.hasValue(desiredOrbit+offset) && desiredOrbit+offset<=parent.maxOrbit) {
+      offset++;
+    }
+    if (!occupiedOrbits.hasValue(desiredOrbit+offset)) {
+      return desiredOrbit+offset;
+    }
+  }
+  parent.maxOrbit+=1;
+  return parent.maxOrbit+1;
+}
+
+String nextName() {
+  globalNameIndex ++;
+  if(globalNameIndex > randomNames.length-1){
+    globalNameIndex = 0;  
+  }
+  return randomNames[globalNameIndex];
+}
+
+String padToLength(String inputString, int desiredLength){
+  while(inputString.length()< desiredLength){
+    inputString += " ";    
+  } 
+  return inputString;
+}
+
+String upperCaseFirst(String input){
+  String temp1, temp2;
+  
+  temp1 = input.substring(0,1);
+  temp2 = input.substring(1);
+  
+  temp1 = temp1.toUpperCase(); 
+  
+  return temp1 + temp2;
+}
+
+int[] evenq_to_axial(int x, int y) {
+  int q = x;
+  int r = y - (x+(x%2))/2;
+  
+  int[] returnVal = {q,r};
+  return returnVal;
+}
+
+int distance(int[] hexA, int[] hexB){
+  return (abs(hexA[0] - hexB[0]) + abs(hexA[0] + hexA[1] - hexB[0] - hexB[1]) + abs(hexA[1] - hexB[1])) / 2;  
+}
+
+int insertOrbit(IntList occupiedOrbits, int desiredOrbit, object parent) {
+  if (!occupiedOrbits.hasValue(desiredOrbit)) {
+    return desiredOrbit;
+  } else {
+    int offset = 1;
+    while (!occupiedOrbits.hasValue(desiredOrbit+offset) && desiredOrbit+offset<=parent.maxOrbit) {
+      offset++;
+    }
+    if (!occupiedOrbits.hasValue(desiredOrbit+offset)) {
+      return desiredOrbit+offset;
+    }
+  }
+  parent.maxOrbit+=1;
+  return parent.maxOrbit+1;
+}
+
+String nextName() {
+  globalNameIndex ++;
+  if(globalNameIndex > randomNames.length-1){
+    globalNameIndex = 0;  
+  }
+  return randomNames[globalNameIndex];
+}
+
+String padToLength(String inputString, int desiredLength){
+  while(inputString.length()< desiredLength){
+    inputString += " ";    
+  } 
+  return inputString;
+}
+
+String upperCaseFirst(String input){
+  String temp1, temp2;
+  
+  temp1 = input.substring(0,1);
+  temp2 = input.substring(1);
+  
+  temp1 = temp1.toUpperCase(); 
+  
+  return temp1 + temp2;
+}
+
+int[] evenq_to_axial(int x, int y) {
+  int q = x;
+  int r = y - (x+(x%2))/2;
+  
+  int[] returnVal = {q,r};
+  return returnVal;
+}
+
+int distance(int[] hexA, int[] hexB){
+  return (abs(hexA[0] - hexB[0]) + abs(hexA[0] + hexA[1] - hexB[0] - hexB[1]) + abs(hexA[1] - hexB[1])) / 2;  
+}
+
+String timeStamp(String fileType) {
+  if (hour() < 10) {
+    if (minute() < 10) {
+      return str(month()) + '_' + str(day()) + '_' + str(year()) + "_0" + str(hour()) + '0' +str(minute()) + fileType;
+    } else {
+      return str(month()) + '_' + str(day()) + '_' + str(year()) + "_0" + str(hour()) + str(minute()) + fileType;
+    }
+  } else {
+    if (minute() < 10) {
+      return str(month()) + '_' + str(day()) + '_' + str(year()) + '_' + str(hour()) + '0' +str(minute()) + fileType;
+    } else {
+      return str(month()) + '_' + str(day()) + '_' + str(year()) + '_' + str(hour()) + str(minute()) + fileType;
+    }
+  }
+}
+
+String timeStamp() {
+  if (hour() < 10) {
+    if (minute() < 10) {
+      return str(month()) + '_' + str(day()) + '_' + str(year()) + "_0" + str(hour()) + '0' +str(minute());
+    } else {
+      return str(month()) + '_' + str(day()) + '_' + str(year()) + "_0" + str(hour()) + str(minute());
+    }
+  } else {
+    if (minute() < 10) {
+      return str(month()) + '_' + str(day()) + '_' + str(year()) + '_' + str(hour()) + '0' +str(minute());
+    } else {
+      return str(month()) + '_' + str(day()) + '_' + str(year()) + '_' + str(hour()) + str(minute());
+    }
+  }
+}
+
+String timeStamp(boolean seconds) {
+  String output = "";
+  output+=month();
+  output+="_";
+  output+=day();
+  output+="_";
+  output+=year();
+  output+="_";
+  if (hour()<10) {
+    output+="0";
+  }
+  output+=hour();
+  if (minute()<10) {
+    output+="0";
+  }
+  output+=minute();
+  if (seconds) {
+    if (second() <10) {
+      output+="0";
+    }
+    output+=second();
+  }
+
+  return output;
+}
+
+String HMS() {
+  String output = "";
+
+  if (hour()<10) {
+    output+="0";
+  }
+  output+=hour();
+  output+=":";
+  if (minute()<10) {
+    output+="0";
+  }
+  output+=minute();
+  output+=":";
+  if (second() <10) {
+    output+="0";
+  }
+  output+=second();
+  return output;
+}
