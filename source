@@ -8,6 +8,8 @@ StringList SectorDataOutput = new StringList();
 String[] ASectorDataOutput;
 String hexNumber;
 
+XML sectorMetadata;
+
 TableRow SectorOutRow;
 object primary;
 int systems = 0;
@@ -61,6 +63,10 @@ void setup() {
     SectorDataOutput = new StringList();
     generateNames();
     String sectorName = randomNames[dieRoll(1, 1000, -1)];
+
+    sectorMetadata = loadXML("sectorMetaData.xml");
+    sectorMetadata.getChild("Name").setContent(sectorName);
+
     globalNameIndex += dieRoll(1, 20000);
     SectorOutput = new Table();
     SectorOutput.addColumn("Hex");
@@ -144,6 +150,12 @@ void setup() {
     saveTable(SectorOutput, "output/"+ outputFolder+"/"+ sectorName + "/"+ sectorName + " Sector.csv");
     saveTable(SectorOutput, "output/"+ outputFolder+"/"+ sectorName + "/"+ sectorName + " Sector.tsv");
     saveStrings("output/" + outputFolder +"/"+ sectorName + "/"+ sectorName + ".DAT", SectorDataOutput.toArray() );
+    XML[] subsectors = sectorMetadata.getChild("Subsectors").getChildren("Subsector");
+    for(int z = 0; z <16; z++){
+      subsectors[z].setContent(nextName());     
+    }
+    saveXML(sectorMetadata, "output/" + outputFolder + "/" + sectorName + "/" + sectorName + " Metadata.xml");
+
 
     SectorInput = loadTable("output/"+ outputFolder+"/"+ sectorName + "/"+ sectorName + " Sector.csv", "header");
     for (TableRow inputRow : SectorInput.rows()) {
