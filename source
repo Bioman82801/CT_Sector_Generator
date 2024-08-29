@@ -1814,6 +1814,454 @@ class Ship{
   }
 }
 
+class Mainworld {
+  int x, y, techLevel, goodsCost = 4000, population;
+  String name, tradeCodes, travelZone, goodsCode, hex, UWP;
+  boolean gasGiant;
+  char starport;
+  ArrayList<Mainworld> neighbors = new ArrayList<Mainworld>();
+
+  Mainworld(TableRow inputRow) {
+    hex = inputRow.getString("Hex");
+    name = inputRow.getString("Name");
+    UWP = inputRow.getString("UWP");
+    tradeCodes = inputRow.getString("Remarks");
+    travelZone = inputRow.getString("Zone");
+
+    if (inputRow.getString("PBG").charAt(2)-48>0) {
+      gasGiant = true;
+    } else {
+      gasGiant = false;
+    }
+
+    starport = inputRow.getString("UWP").charAt(0);
+    techLevel = inputRow.getString("UWP").charAt(8);
+    if (techLevel >= 65) {
+      techLevel -= 55;
+    } else {
+      techLevel -= 48;
+    }
+
+    population = inputRow.getString("UWP").charAt(4);
+    if (population >= 65) {
+      population -= 55;
+    } else {
+      population -= 48;
+    }
+
+    goodsCost += techLevel*100;
+
+    x = int(inputRow.getString("Hex").substring(0, 2));
+    y = int(inputRow.getString("Hex").substring(2));
+
+    switch(starport) {
+    case 'A':
+      goodsCost -= 1000;
+      break;
+    case 'C':
+      goodsCost += 1000;
+      break;
+    case 'D':
+      goodsCost += 2000;
+      break;
+    case 'E':
+      goodsCost += 3000;
+      break;
+    case 'X':
+      goodsCost += 5000;
+      break;
+    }
+
+    if (match(tradeCodes, "Ag") != null) {
+      goodsCost -= 1000;
+    }
+    if (match(tradeCodes, "As") != null) {
+      goodsCost -= 1000;
+    }
+    if (match(tradeCodes, "Ba") != null) {
+      goodsCost += 1000;
+    }
+    if (match(tradeCodes, "De") != null) {
+      goodsCost += 1000;
+    }
+    if (match(tradeCodes, "Fl") != null) {
+      goodsCost += 1000;
+    }
+    if (match(tradeCodes, "Hi") != null) {
+      goodsCost -= 1000;
+    }
+    if (match(tradeCodes, "In") != null) {
+      goodsCost -= 1000;
+    }
+    if (match(tradeCodes, "Lo") != null) {
+      goodsCost += 1000;
+    }
+    if (match(tradeCodes, "Ni") != null) {
+      goodsCost += 1000;
+    }
+    if (match(tradeCodes, "Po") != null) {
+      goodsCost -= 1000;
+    }
+    if (match(tradeCodes, "Ri") != null) {
+      goodsCost += 1000;
+    }
+    if (match(tradeCodes, "Va") != null) {
+      goodsCost += 1000;
+    }
+
+    goodsCode = starport + "-" + hex(techLevel, 1) + " " + tradeCodes + str(goodsCost);
+  }
+
+  void findMarkets(Ship trader) {
+    for (Mainworld check : mainworlds) {
+      if (distance(evenq_to_axial(x, y), evenq_to_axial(check.x, check.y)) <= trader.maximumJump && check != this) {
+        neighbors.add(check);
+      }
+    }
+  }
+
+  void generateReport(Mainworld route, Ship trader) {
+    int marketModifier = this.findMarketModifier(route);
+    float techDifferential = (techLevel - route.techLevel)/10.0;
+    int cargoCost = goodsCost * trader.cargo;
+    int salePrice = int((5000 + 1000*marketModifier) * (1+techDifferential));
+    int tempOperatingCost = trader.operatingCost;
+
+    output.println("");
+    output.println("Destination: " + route.name + " " + route.UWP);
+    output.println("");
+    if (route.travelZone.equals("R")) {
+      output.println(char(9) + "+++++++++++++++++++++++++++++++++++++++++");
+      output.println(char(9) + "+       WARNING: WORLD IS RED ZONE      +");
+      output.println(char(9) + "+  ALL TRADE FORBIDDEN BY IMPERIAL LAW  +");
+      output.println(char(9) + "+++++++++++++++++++++++++++++++++++++++++");
+      output.println("");
+    } else if (route.travelZone.equals("A")) {
+      output.println(char(9) + "-----------------------------------");
+      output.println(char(9) + "-    Alert: World is Amber Zone   -");
+      output.println(char(9) + "- Utilize caution in all dealings -");
+      output.println(char(9) + "-----------------------------------");
+      output.println("");
+    }
+    if (match(route.tradeCodes, "Ba")!=null) {
+      output.println(char(9) + "World Barren, no trade possible");
+      return;
+    }
+    if ((route.starport == 'E' || route.starport == 'X') && !route.gasGiant && route.UWP.charAt(3) == '0') {
+      output.println(char(9) + "Return Trip Impossible: No Fuel Avalialbe At Destination");
+      return;
+    }
+
+    output.println(char(9) + "Goods Purchased: "+ trader.cargo +" tons of " + goodsCode);
+    output.println(char(9) + "Cost: " + cargoCost+ "Cr");
+    output.println("");
+
+    switch(route.starport) {
+    case 'A':
+    case 'B':
+      tempOperatingCost += trader.fuel*refinedFuelCost;
+      output.println(char(9) + "Refined Fuel Purchased at Starport for "+ str(trader.fuel*refinedFuelCost)+ "Cr");
+      break;
+    case 'C':
+    case 'D':
+      tempOperatingCost += trader.fuel*unrefinedFuelCost;
+      output.println(char(9) + "Unrefined Fuel Purchased at Starport for "+ str(trader.fuel*unrefinedFuelCost)+ "Cr");
+      break;
+    default:
+      if (route.gasGiant) {
+        output.println(char(9) + "Unrefined Fuel Skimmed from Gas Giant");
+      } else {
+        output.println(char(9) + "Unrefined Fuel Skimmed from Water Source at " + route.name);
+      }
+    }
+    output.println("");
+
+    //To Do: PASSENGERS
+
+    int saleTotal = salePrice*trader.cargo;
+
+    output.println(char(9) + "Sale Price: " + salePrice + "Cr/ton");
+    output.println(char(9) + "Sale Total: " + saleTotal + "Cr");
+
+    if (trader.subsidized) {
+      output.println(char(9) + "Subsidized Merchant -50% of Gross Receipts");
+      saleTotal *=.5;
+      output.println(char(9) + "Adjusted Sale Total: " + saleTotal + "Cr");
+    }
+
+    output.println(char(9) + "Sale Profit: " + str(saleTotal - cargoCost) + "Cr");
+
+    if (saleTotal - cargoCost <= 0) {
+      output.println(char(9) + "************************************");
+      output.println(char(9) + "* Speculative Trading Unprofitable *");
+      output.println(char(9) + "*    Generic Cargo Used Instead    *");
+      output.println(char(9) + "************************************");
+      cargoCost = 0;
+      saleTotal = trader.cargo * 1000;
+      output.println(char(9) + "Cargo Income: " + saleTotal + "Cr");
+      if (trader.subsidized) {
+        output.println(char(9) + "Subsidized Merchant: -50% of Gross Receipts");
+        saleTotal *=.5;
+        output.println(char(9) + "Adjusted Cargo Income: " + saleTotal + "Cr");
+      }
+    }
+    output.println("");
+    output.println(char(9) + "Per Jump Operating Costs: " + tempOperatingCost + "Cr");
+    output.println();
+    output.println(char(9) + "Net Profit/jump: " + str(saleTotal - cargoCost - tempOperatingCost)+ "Cr");
+  }
+
+  int findMarketModifier(Mainworld route) {
+    int mod = 0;
+
+    if (match(tradeCodes, "Ag") != null) {
+      if (match(route.tradeCodes, "Ag") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "As") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "De") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Hi") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "In") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Lo") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Na") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Ri") != null) {
+        mod ++;
+      }
+    }
+
+    if (match(tradeCodes, "As") != null) {
+      if (match(route.tradeCodes, "As") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Hi") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "In") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Na") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Ri") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Va") != null && !(match(route.tradeCodes, "As") != null)) {
+        mod ++;
+      }
+    }
+    if (match(tradeCodes, "Ba") != null) {
+      if (match(route.tradeCodes, "Ag") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "In") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Na") != null) {
+        mod ++;
+      }
+    }
+    if (match(tradeCodes, "De") != null) {
+      if (match(route.tradeCodes, "De") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Na") != null) {
+        mod ++;
+      }
+    }
+    if (match(tradeCodes, "Fl") != null) {
+      if (match(route.tradeCodes, "Fl") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "In") != null) {
+        mod ++;
+      }
+    }
+    if (match(tradeCodes, "Hi") != null) {
+      if (match(route.tradeCodes, "Hi") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Lo") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Ri") != null) {
+        mod ++;
+      }
+    }
+    if (match(tradeCodes, "Ic") != null) {
+      if (match(route.tradeCodes, "In") != null) {
+        mod ++;
+      }
+    }
+    if (match(tradeCodes, "In") != null) {
+      if (match(route.tradeCodes, "Ag") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "As") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "De") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Fl") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Hi") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "In") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Ni") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Po") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Ri") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Va") != null && !(match(route.tradeCodes, "As") != null)) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Wa") != null) {
+        mod ++;
+      }
+    }
+    if (match(tradeCodes, "Lo") != null) {
+      if (match(route.tradeCodes, "In") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Ri") != null) {
+        mod ++;
+      }
+    }
+    if (match(tradeCodes, "Na") != null) {
+      if (match(route.tradeCodes, "As") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "De") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Va") != null && !(match(route.tradeCodes, "As") != null)) {
+        mod ++;
+      }
+    }
+    if (match(tradeCodes, "Ni") != null) {
+      if (match(route.tradeCodes, "In") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Ni") != null) {
+        mod --;
+      }
+    }
+    if (match(tradeCodes, "Po") != null) {
+      if (match(route.tradeCodes, "Po") != null) {
+        mod --;
+      }
+    }
+    if (match(tradeCodes, "Ri") != null) {
+      if (match(route.tradeCodes, "Ag") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "De") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Hi") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "In") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Na") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Ri") != null) {
+        mod ++;
+      }
+    }
+    if (match(tradeCodes, "Va") != null && !(match(tradeCodes, "As") != null)) {
+      if (match(route.tradeCodes, "As") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "In") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Va") != null && !(match(route.tradeCodes, "As") != null)) {
+        mod ++;
+      }
+    }
+    if (match(tradeCodes, "Wa") != null) {
+      if (match(route.tradeCodes, "In") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Ri") != null) {
+        mod ++;
+      }
+      if (match(route.tradeCodes, "Wa") != null) {
+        mod ++;
+      }
+    }
+
+    return mod;
+  }
+
+
+  void boilerPlate(Ship trader) {
+
+    output.println("Trade Report for " + name + " Based Shipping");
+    output.println("");
+    output.println("Ship Type: " + trader.type);
+    output.println("Cargo Space: " + str(trader.cargo));
+    output.println("Passenger Space: " + trader.passengers + " Staterooms, and " + trader.lowBerth + " Low Berths");
+    output.println("");
+
+    output.println("Operating Costs");
+    if(!trader.subsidized){
+      output.println(char(9) + "Monthly Payment: " + int(trader.cost/240.0) + "Cr/month");
+    }else{
+      output.println(char(9) + "Monthly Payment: Ship Subsidized, 50% of Gross Receipts Paid To Subsidising Agency"); 
+    }
+    output.println(char(9) + "Crew Salaries: " + trader.crewSalary + "Cr/month");
+    output.println(char(9) + "Fuel: " + str(trader.fuel*refinedFuelCost) + "Cr/jump for refined, " + str(trader.fuel*unrefinedFuelCost) + "Cr/jump for unrefined");
+    output.println(char(9) + "Maintenance: " + str(int(.001*trader.cost)) + "Cr/year, " + str(int(.001*trader.cost/12)) + "Cr/month");
+    output.println(char(9) + "Lifesupport: " + str(2000*trader.crew) + "Cr/jump for crew, 2000Cr/Non-Low Passenger + 100Cr/Low Passenger");
+    output.println(char(9) + "Berthing Costs: 100Cr/jump");
+    output.println("");
+
+    output.println("Goods Avaliable: " + goodsCode);
+    output.println("Avaliable Markets in J-"+trader.maximumJump);
+    for (Mainworld route : neighbors) {
+      output.println(char(9) + route.hex + " " + route.name + " (" + route.UWP + ") " + route.tradeCodes + ", Market Mod: " + findMarketModifier(route) + ", Tech Diff: " + str((techLevel-route.techLevel)*10)+ "%");
+    }
+    if (travelZone.equals("R")) {
+      output.println("");
+      output.println("+++++++++++++++++++++++++++++++++++++++++");
+      output.println("+   WARNING: SOURCE WORLD IS RED ZONE   +");
+      output.println("+  ALL TRADE FORBIDDEN BY IMPERIAL LAW  +");
+      output.println("+++++++++++++++++++++++++++++++++++++++++");
+    } else if (travelZone.equals("A")) {
+      output.println("");
+      output.println("-------------------------------------");
+      output.println("- Alert: Source World is Amber Zone -");
+      output.println("-  Utilize caution in all dealings  -");
+      output.println("-------------------------------------");
+    }
+  }
+}
+
+
 //Generic die rolling function. Imput dice number, followed by the number of faces on the die,
 //followed by any dice modifier. By default the function won't return a value less that 0, but this
 //can be enabled by setting lessThanZero to true. There is also a version for no modifer, as this
