@@ -5,7 +5,6 @@ int globalNameIndex = -1;
 
 String[] randomNames = new String[20000];
 StringList SectorDataOutput = new StringList();
-StringList autoHotKey = new StringList();
 String[] ASectorDataOutput;
 String hexNumber;
 
@@ -13,9 +12,9 @@ TableRow SectorOutRow;
 object primary;
 int systems = 0;
 int worlds = 0;
-int sectorsToGenerate = 10;
+int sectorsToGenerate = 1;
 int reportsGenerated = 0;
-String outputFolder = "10 Generated Sectors " + timeStamp();
+String outputFolder = "Generated Sectors " + timeStamp();
 ArrayList<Mainworld> mainworlds = new ArrayList<Mainworld>();
 ArrayList<Ship> shipList = new ArrayList<Ship>();
 PrintWriter output;
@@ -52,25 +51,14 @@ void setup() {
   background(150);
   println("Start Time: " + HMS());
 
-  //Ship(String type, int cargo, int fuel,  int maximumJump, int cost, int crew, int crewSalary, int passengers, int lowBerth)
-  shipList.add(new Ship("Free Trader", 80, 30, 1, 37080000, 6, 17000, 4, 20));
-  shipList.add(new Ship("Far Trader", 60, 50, 2, 66175000, 5, 21000, 5, 4));
+  //Ship(String type, int cargo, int fuel,  int maximumJump, int cost, int crew, int crewSalary, int passengers, int lowBerth,  boolean subsidezed)
+  shipList.add(new Ship("Free Trader", 80, 30, 1, 37080000, 6, 17000, 4, 20, false));
+  shipList.add(new Ship("Far Trader", 60, 50, 2, 66175000, 5, 21000, 5, 4, false));
+  shipList.add(new Ship("Fat Trader", 200, 50, 1, 100035000, 7, 22000, 8, 9, true));
 
   for (int i = 0; i < sectorsToGenerate; i++) {
-    //NameInput = loadTable("names.csv", "header");
-    //randomNames = new String[NameInput.getRowCount()];
-    //int index = 0;
-    //for (TableRow inRow : NameInput.rows()) {
-    //  randomNames[index] = inRow.getString("Name");
-    //  index++;
-    //}
     mainworlds.clear();
     SectorDataOutput = new StringList();
-    autoHotKey = new StringList();
-    autoHotKey.append("F9::");
-    autoHotKey.append("{");
-    autoHotKey.append("WinWait \"Untitled\"");
-    autoHotKey.append("WinActivate");
     generateNames();
     String sectorName = randomNames[dieRoll(1, 1000, -1)];
     globalNameIndex += dieRoll(1, 20000);
@@ -153,12 +141,9 @@ void setup() {
     SectorDataOutput.reverse();
     SectorDataOutput.append(str(systems));
     SectorDataOutput.reverse();
-    autoHotKey.append("}");
     saveTable(SectorOutput, "output/"+ outputFolder+"/"+ sectorName + "/"+ sectorName + " Sector.csv");
     saveTable(SectorOutput, "output/"+ outputFolder+"/"+ sectorName + "/"+ sectorName + " Sector.tsv");
     saveStrings("output/" + outputFolder +"/"+ sectorName + "/"+ sectorName + ".DAT", SectorDataOutput.toArray() );
-    saveStrings("output/" + outputFolder +"/"+ sectorName + "/"+ sectorName + ".ahk", autoHotKey.toArray());
-    //}
 
     SectorInput = loadTable("output/"+ outputFolder+"/"+ sectorName + "/"+ sectorName + " Sector.csv", "header");
     for (TableRow inputRow : SectorInput.rows()) {
@@ -181,9 +166,6 @@ void setup() {
         }
       }
     }
-    //textSize(48);
-    //background(150);
-    //text(str(i) + " Sectors Generated", 20, 100);
   }
 
   text(str(systems)+ " Systems Generated", 20, 100);
@@ -192,6 +174,7 @@ void setup() {
   println("Finish Time: " +HMS());
   println("DONE");
 }
+
 class Mainworld {
   int x, y, techLevel, goodsCost = 4000, population;
   String name, tradeCodes, travelZone, goodsCode, hex, UWP;
@@ -303,7 +286,6 @@ class Mainworld {
     float techDifferential = (techLevel - route.techLevel)/10.0;
     int cargoCost = goodsCost * trader.cargo;
     int salePrice = int((5000 + 1000*marketModifier) * (1+techDifferential));
-    int operatingCosts = int((int(trader.cost/240.0) + trader.crewSalary + int(.001*trader.cost/12))/2) + 2000*trader.crew + 100;
 
     output.println("");
     output.println("Destination: " + route.name + " " + route.UWP);
@@ -337,12 +319,12 @@ class Mainworld {
     switch(route.starport) {
     case 'A':
     case 'B':
-      operatingCosts += trader.fuel*refinedFuelCost;
+      trader.operatingCost += trader.fuel*refinedFuelCost;
       output.println(char(9) + "Refined Fuel Purchased at Starport for "+ str(trader.fuel*refinedFuelCost)+ "Cr");
       break;
     case 'C':
     case 'D':
-      operatingCosts += trader.fuel*unrefinedFuelCost;
+      trader.operatingCost += trader.fuel*unrefinedFuelCost;
       output.println(char(9) + "Unrefined Fuel Purchased at Starport for "+ str(trader.fuel*unrefinedFuelCost)+ "Cr");
       break;
     default:
@@ -354,15 +336,22 @@ class Mainworld {
     }
     output.println("");
 
-    //PASSENGERS
+    //To Do: PASSENGERS
 
     int saleTotal = salePrice*trader.cargo;
 
     output.println(char(9) + "Sale Price: " + salePrice + "Cr/ton");
     output.println(char(9) + "Sale Total: " + saleTotal + "Cr");
+
+    if (trader.subsidized) {
+      output.println(char(9) + "Subsidized Merchant -50% of Gross Receipts");
+      saleTotal *=.5;
+      output.println(char(9) + "Adjusted Sale Total: " + saleTotal + "Cr");
+    }
+
     output.println(char(9) + "Sale Profit: " + str(saleTotal - cargoCost) + "Cr");
 
-    if (salePrice<goodsCost) {
+    if (saleTotal - cargoCost <= 0) {
       output.println(char(9) + "************************************");
       output.println(char(9) + "* Speculative Trading Unprofitable *");
       output.println(char(9) + "*    Generic Cargo Used Instead    *");
@@ -370,11 +359,16 @@ class Mainworld {
       cargoCost = 0;
       saleTotal = trader.cargo * 1000;
       output.println(char(9) + "Cargo Income: " + saleTotal + "Cr");
+      if (trader.subsidized) {
+        output.println(char(9) + "Subsidized Merchant: -50% of Gross Receipts");
+        saleTotal *=.5;
+        output.println(char(9) + "Adjusted Cargo Income: " + saleTotal + "Cr");
+      }
     }
     output.println("");
-    output.println(char(9) + "Per Jump Operating Costs: " + operatingCosts + "Cr");
+    output.println(char(9) + "Per Jump Operating Costs: " + trader.operatingCost + "Cr");
     output.println();
-    output.println(char(9) + "Net Profit/jump: " + str(saleTotal - cargoCost - operatingCosts)+ "Cr");
+    output.println(char(9) + "Net Profit/jump: " + str(saleTotal - cargoCost - trader.operatingCost)+ "Cr");
   }
 
   int findMarketModifier(Mainworld route) {
@@ -594,7 +588,11 @@ class Mainworld {
     output.println("");
 
     output.println("Operating Costs");
-    output.println(char(9) + "Montly Payment: " + int(trader.cost/240.0) + "Cr/month");
+    if(!trader.subsidized){
+      output.println(char(9) + "Monthly Payment: " + int(trader.cost/240.0) + "Cr/month");
+    }else{
+      output.println(char(9) + "Monthly Payment: Ship Subsidized, 50% of Gross Receipts Paid To Subsidising Agency"); 
+    }
     output.println(char(9) + "Crew Salaries: " + trader.crewSalary + "Cr/month");
     output.println(char(9) + "Fuel: " + str(trader.fuel*refinedFuelCost) + "Cr/jump for refined, " + str(trader.fuel*unrefinedFuelCost) + "Cr/jump for unrefined");
     output.println(char(9) + "Maintenance: " + str(int(.001*trader.cost)) + "Cr/year, " + str(int(.001*trader.cost/12)) + "Cr/month");
@@ -617,11 +615,12 @@ class Mainworld {
       output.println("");
       output.println("-------------------------------------");
       output.println("- Alert: Source World is Amber Zone -");
-      output.println("- Utilize caution in all dealings   -");
+      output.println("-  Utilize caution in all dealings  -");
       output.println("-------------------------------------");
     }
   }
 }
+
 class object {
   int type, orbit, size, atmo, hydro, pop, gov, law, tech, satellites, minOrbit, maxOrbit, HZ;
   int primaryTypeRoll, primarySizeRoll, orbitType, avaliableOrbits, MWPop, MWgov, MWlaw, MWtech, MWatmo;
@@ -1779,8 +1778,6 @@ class object {
       SectorOutRow.setString("W", str(worlds));
       SectorOutRow.setString("Nobility", nobility);
       SectorOutRow.setString("Zone", str(zone));
-      //SectorOutRow.setString("Goods", goods);
-      autoHotKey.append("SendText \"" + name + "\"");
       name = padToLength(name, 20);
       tradeCodes = padToLength(tradeCodes, 18+3);
       bases = padToLength(bases, 2);
@@ -1788,20 +1785,16 @@ class object {
       nobility = padToLength(nobility, 5);
 
       SectorDataOutput.append(hexNumber + " "+ name + " " + UWP + " "+ tradeCodes + stringIx + " " + Ex +  " " + Cx + " - "+ bases + " - "+ primary.PBG + " " + padToLength(str(worlds), 2) + " Im   " + primary.UWP);
-      autoHotKey.append("Send \"{Enter}\"");
-      autoHotKey.append("Sleep 10000");
-      autoHotKey.append("SendText \"n\"");
-      autoHotKey.append("Sleep 1000");
-      autoHotKey.append("Send \"{Enter}\"");
     }
   }
 }
 
 class Ship{
   String type;
-  int cargo, fuel, maximumJump, cost, crew, passengers, lowBerth, crewSalary;
+  int cargo, fuel, maximumJump, cost, crew, passengers, lowBerth, crewSalary, operatingCost;
+  boolean subsidized;
   
-  Ship(String shipType, int cargoSpace, int fuelLoad, int maxJump, int shipCost, int minimumCrew, int crewPay, int passengerSpace, int lowPassengers){
+  Ship(String shipType, int cargoSpace, int fuelLoad, int maxJump, int shipCost, int minimumCrew, int crewPay, int passengerSpace, int lowPassengers, boolean sub){
     type = shipType;
     cargo = cargoSpace;
     fuel = fuelLoad;
@@ -1811,6 +1804,13 @@ class Ship{
     passengers = passengerSpace;
     lowBerth = lowPassengers;
     crewSalary = crewPay;
+    subsidized = sub;
+    
+    if (!subsidized) {
+      operatingCost = int((int(cost/240.0) + crewSalary + int(.001*cost/12))/2) + 2000*crew + 100;
+    } else {
+      operatingCost = int((crewSalary + int(.001*cost/12))/2) + 2000*crew + 100;
+    }
   }
 }
 
@@ -1918,58 +1918,28 @@ int distance(int[] hexA, int[] hexB){
   return (abs(hexA[0] - hexB[0]) + abs(hexA[0] + hexA[1] - hexB[0] - hexB[1]) + abs(hexA[1] - hexB[1])) / 2;  
 }
 
-int insertOrbit(IntList occupiedOrbits, int desiredOrbit, object parent) {
-  if (!occupiedOrbits.hasValue(desiredOrbit)) {
-    return desiredOrbit;
-  } else {
-    int offset = 1;
-    while (!occupiedOrbits.hasValue(desiredOrbit+offset) && desiredOrbit+offset<=parent.maxOrbit) {
-      offset++;
-    }
-    if (!occupiedOrbits.hasValue(desiredOrbit+offset)) {
-      return desiredOrbit+offset;
+String[] tempDict;
+ArrayList<String> dict = new ArrayList<String>();
+void generateNames(){
+  tempDict = loadStrings("words_alpha.txt");
+  //println(tempDict.length);
+  for(int i = 0; i < tempDict.length; i++){
+    if(tempDict[i].length() > 3 && tempDict[i].length() < 9){
+      dict.add(tempDict[i]);
     }
   }
-  parent.maxOrbit+=1;
-  return parent.maxOrbit+1;
-}
-
-String nextName() {
-  globalNameIndex ++;
-  if(globalNameIndex > randomNames.length-1){
-    globalNameIndex = 0;  
+  
+  for(int i = 0; i < 20000; i++){
+    //TableRow newRow = output.addRow();
+    String name = "";
+    name += dict.get(floor(random(0,dict.size())));
+    name = name.substring(0,floor(name.length()/2));
+    String ending = "";
+    ending = dict.get(floor(random(0,dict.size())));
+    ending = ending.substring(ceil(ending.length()/2)-1);
+    name += ending;
+    randomNames[i] = upperCaseFirst(name);
   }
-  return randomNames[globalNameIndex];
-}
-
-String padToLength(String inputString, int desiredLength){
-  while(inputString.length()< desiredLength){
-    inputString += " ";    
-  } 
-  return inputString;
-}
-
-String upperCaseFirst(String input){
-  String temp1, temp2;
-  
-  temp1 = input.substring(0,1);
-  temp2 = input.substring(1);
-  
-  temp1 = temp1.toUpperCase(); 
-  
-  return temp1 + temp2;
-}
-
-int[] evenq_to_axial(int x, int y) {
-  int q = x;
-  int r = y - (x+(x%2))/2;
-  
-  int[] returnVal = {q,r};
-  return returnVal;
-}
-
-int distance(int[] hexA, int[] hexB){
-  return (abs(hexA[0] - hexB[0]) + abs(hexA[0] + hexA[1] - hexB[0] - hexB[1]) + abs(hexA[1] - hexB[1])) / 2;  
 }
 
 String timeStamp(String fileType) {
